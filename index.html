@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>QR Bulk Label Generator - 12 Per Sheet</title>
+<title>QR Bulk Label Generator - 10 Per Sheet</title>
 
 <style>
-/* ===== Screen ===== */
 body{
   font-family: -apple-system, system-ui, Arial, sans-serif;
   margin: 20px;
 }
+
 .controls{ margin-bottom: 20px; }
 
 textarea{
@@ -27,66 +27,59 @@ button{
   margin-top: 10px;
 }
 
-/* ===== Print Grid (12 per sheet = 2 columns x 6 rows) ===== */
+/* ===== 10 PER 8.5x11 (2 columns x 5 rows) ===== */
+
 .sheet{
   display: grid;
   grid-template-columns: 1fr 1fr;
   column-gap: 30px;
-  row-gap: 10px;
-
-  /* needed for the middle cut line */
+  row-gap: 14px;
   position: relative;
 }
 
-/* Middle vertical cut line between columns */
+/* Vertical cut line between columns */
 .sheet::before{
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(50%);               /* center of the grid area */
-  width: 0;
-  border-left: 1px dashed #999;  /* CUT LINE */
-  pointer-events: none;
+  content:"";
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:50%;
+  border-left:1px dashed #aaa;
 }
 
-/* Each label cell = fixed height so exactly 6 rows fit */
+/* Each label sized so 5 rows fit nicely */
 .label{
-  height: 1.6in;
+  height: 1.9in;                 /* 5 rows per column */
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 130px 1fr;
   align-items: center;
-  column-gap: 18px;
-
-  /* cell border (cut guide) */
+  column-gap: 20px;
   border: 1px dashed #bbb;
-  padding: 6px;
-
+  padding: 8px;
   page-break-inside: avoid;
 }
 
 .qr img{
-  width: 120px;
-  height: 120px;
+  width: 130px;
+  height: 130px;
   display: block;
   image-rendering: pixelated;
 }
 
 .text{
-  font-size: 32px;
+  font-size: 36px;
   font-weight: 800;
-  white-space: nowrap;   /* no wrap */
+  white-space: nowrap;
 }
 
-/* Add horizontal cut lines across the full page between each row */
+/* Horizontal cut lines between rows */
 .cut-row{
   grid-column: 1 / -1;
-  border-top: 1px dashed #999;
+  border-top: 1px dashed #aaa;
   height: 0;
-  margin: 0;
 }
 
-/* Page break every 12 labels */
+/* Page break every 10 labels */
 .page-break{
   grid-column: 1 / -1;
   break-after: page;
@@ -94,12 +87,9 @@ button{
   height: 0;
 }
 
-/* ===== Print rules ===== */
 @media print{
   body{ margin: 0.5in; }
   .controls{ display:none; }
-
-  /* ensure dashed lines print clean */
   *{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 </style>
@@ -108,16 +98,7 @@ button{
 <body>
 
 <div class="controls">
-  <h2>QR Bulk Label Generator (12 Per Sheet)</h2>
-
-  <p>Supports:</p>
-  <ul>
-    <li>RTF-1:RTF-30</li>
-    <li>RTF-1:30</li>
-    <li>RTF-01..12</li>
-    <li>RTF-1, RTF-3 RTF-7</li>
-    <li>Mixed ranges and lists</li>
-  </ul>
+  <h2>QR Bulk Label Generator (10 Per Sheet)</h2>
 
   <textarea id="bulkInput" placeholder="Example:
 RTF-1:RTF-30"></textarea>
@@ -131,11 +112,10 @@ RTF-1:RTF-30"></textarea>
 <div id="preview" class="sheet"></div>
 
 <script>
-/* ===== QR Generator ===== */
 function qrUrl(data){
-  const size = 800;   // high resolution
-  const margin = 12;  // quiet zone
-  const ecc = "Q";    // error correction
+  const size = 900;
+  const margin = 12;
+  const ecc = "Q";
   return (
     "https://api.qrserver.com/v1/create-qr-code/?" +
     "format=png" +
@@ -146,7 +126,6 @@ function qrUrl(data){
   );
 }
 
-/* ===== Range Parsing ===== */
 function parseTrailingNumber(token){
   const m = token.match(/^(.*?)(\d+)$/);
   if(!m) return null;
@@ -155,111 +134,92 @@ function parseTrailingNumber(token){
 
 function expandRangeToken(token){
   let op = null;
-  if(token.includes("..")) op = "..";
-  else if(token.includes(":")) op = ":";
-
+  if(token.includes("..")) op="..";
+  else if(token.includes(":")) op=":";
   if(!op) return null;
 
-  const parts = token.split(op).map(t => t.trim());
-  if(parts.length !== 2) return null;
+  const parts = token.split(op).map(t=>t.trim());
+  if(parts.length!==2) return null;
 
-  let [a,b] = parts;
-  if(!a || !b) return null;
-
-  const pa = parseTrailingNumber(a);
+  let [a,b]=parts;
+  const pa=parseTrailingNumber(a);
   if(!pa) return null;
 
   let pb;
   if(/^\d+$/.test(b)){
-    pb = { prefix: pa.prefix, numStr: b, num: parseInt(b,10) };
+    pb={prefix:pa.prefix,numStr:b,num:parseInt(b,10)};
   }else{
-    pb = parseTrailingNumber(b);
+    pb=parseTrailingNumber(b);
     if(!pb) return null;
   }
 
-  if(pa.prefix !== pb.prefix) return null;
+  if(pa.prefix!==pb.prefix) return null;
 
-  const start = pa.num;
-  const end = pb.num;
-  const width = pa.numStr.length;
-
-  const step = start <= end ? 1 : -1;
-  const results = [];
-
-  for(let n = start; step>0 ? n<=end : n>=end; n+=step){
-    results.push(pa.prefix + String(n).padStart(width,"0"));
+  const width=pa.numStr.length;
+  const step=pa.num<=pb.num?1:-1;
+  const results=[];
+  for(let n=pa.num; step>0?n<=pb.num:n>=pb.num; n+=step){
+    results.push(pa.prefix+String(n).padStart(width,"0"));
   }
   return results;
 }
 
 function expandAll(text){
-  const tokens = text
-    .replace(/,/g," ")
-    .split(/\s+/)
-    .map(t => t.trim())
-    .filter(Boolean);
-
-  const results = [];
-  tokens.forEach(token=>{
-    const expanded = expandRangeToken(token);
+  const tokens=text.replace(/,/g," ").split(/\s+/).filter(Boolean);
+  const results=[];
+  tokens.forEach(t=>{
+    const expanded=expandRangeToken(t);
     if(expanded) results.push(...expanded);
-    else results.push(token);
+    else results.push(t);
   });
   return results;
 }
 
-/* ===== Rendering with row cut lines + page breaks ===== */
 function generateBulk(){
-  const input = document.getElementById("bulkInput").value;
-  const codes = expandAll(input);
-  const preview = document.getElementById("preview");
-  preview.innerHTML = "";
+  const input=document.getElementById("bulkInput").value;
+  const codes=expandAll(input);
+  const preview=document.getElementById("preview");
+  preview.innerHTML="";
 
-  // We place labels in a 2-column grid.
-  // After every 2 labels, we've completed a row; add a horizontal cut line.
-  // After 12 labels, add a page break.
-  codes.forEach((code, idx) => {
-    const label = document.createElement("div");
-    label.className = "label";
+  codes.forEach((code,i)=>{
+    const label=document.createElement("div");
+    label.className="label";
 
-    const qrDiv = document.createElement("div");
-    qrDiv.className = "qr";
+    const qrDiv=document.createElement("div");
+    qrDiv.className="qr";
 
-    const img = document.createElement("img");
-    img.src = qrUrl(code);
-    img.alt = "QR";
+    const img=document.createElement("img");
+    img.src=qrUrl(code);
+    img.alt="QR";
     qrDiv.appendChild(img);
 
-    const text = document.createElement("div");
-    text.className = "text";
-    text.textContent = code.toUpperCase();
+    const text=document.createElement("div");
+    text.className="text";
+    text.textContent=code.toUpperCase();
 
     label.appendChild(qrDiv);
     label.appendChild(text);
     preview.appendChild(label);
 
-    const n = idx + 1;
+    const n=i+1;
 
-    // Add horizontal cut line after each completed row (every 2 labels),
-    // but not after the last row on a page (after 12 labels).
-    if(n % 2 === 0 && n % 12 !== 0){
-      const hr = document.createElement("div");
-      hr.className = "cut-row";
+    if(n%2===0 && n%10!==0){
+      const hr=document.createElement("div");
+      hr.className="cut-row";
       preview.appendChild(hr);
     }
 
-    // Page break after 12 labels
-    if(n % 12 === 0){
-      const pb = document.createElement("div");
-      pb.className = "page-break";
+    if(n%10===0){
+      const pb=document.createElement("div");
+      pb.className="page-break";
       preview.appendChild(pb);
     }
   });
 }
 
 function clearLabels(){
-  document.getElementById("preview").innerHTML = "";
-  document.getElementById("bulkInput").value = "";
+  document.getElementById("preview").innerHTML="";
+  document.getElementById("bulkInput").value="";
 }
 </script>
 
