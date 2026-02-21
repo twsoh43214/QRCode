@@ -95,12 +95,10 @@ input, select, button{
 </div>
 
 <div id="preview" class="preview"></div>
-
 <script>
-
 function makeQrSvg(data){
-  const size = 600;   // HIGH resolution
-  const margin = 10;  // proper quiet zone
+  const size = 600;
+  const margin = 10;
 
   const url =
     "https://api.qrserver.com/v1/create-qr-code/?format=svg" +
@@ -133,9 +131,12 @@ async function addLabel(){
 
   const svg = qrWrap.querySelector("svg");
   if(svg){
-    svg.setAttribute("width","100%");
-    svg.setAttribute("height","100%");
-    svg.setAttribute("shape-rendering","crispEdges");
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+    svg.setAttribute("preserveAspectRatio","xMidYMid meet");
+    svg.style.width = "100%";
+    svg.style.height = "100%";
+    svg.style.display = "block";
   }
 
   const text = document.createElement("div");
@@ -156,8 +157,8 @@ async function addLabel(){
 function clearLabels(){
   document.getElementById("preview").innerHTML = "";
 }
-
 </script>
+
 
 </body>
 </html>
