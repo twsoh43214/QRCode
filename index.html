@@ -1,132 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>QR Bulk Label Generator - 8 Per Sheet</title>
-
-<style>
-body{
-  font-family: -apple-system, system-ui, Arial, sans-serif;
-  margin: 20px;
-}
-
-.controls{ margin-bottom: 20px; }
-
-textarea{
-  width: 100%;
-  height: 140px;
-  font-size: 16px;
-  padding: 10px;
-}
-
-button{
-  font-size: 16px;
-  padding: 10px 16px;
-  margin-right: 8px;
-  margin-top: 10px;
-}
-
-/* ===== PRINT SETTINGS ===== */
-@page{
-  size: letter;
-  margin: 0.5in;
-}
-
-.pages{
-  display: grid;
-  gap: 18px;
-}
-
-/* ONE PAGE = 8 LABELS (2 COL x 4 ROW) */
-.page{
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(4, 2.25in);  /* 4 rows */
-  position: relative;
-}
-
-/* Vertical cut line */
-.page::before{
-  content:"";
-  position:absolute;
-  top:0;
-  bottom:0;
-  left:50%;
-  border-left:1px dashed #aaa;
-}
-
-/* Label cell */
-.label{
-  box-sizing: border-box;
-  height: 2.25in;
-  display: grid;
-  grid-template-columns: 1.5in 1fr;
-  align-items: center;
-  column-gap: 0.2in;
-  padding: 0.15in;
-  border: 1px dashed #bbb;
-}
-
-/* Bigger QR */
-.qr img{
-  width: 1.5in;
-  height: 1.5in;
-  display:block;
-  image-rendering: pixelated;
-}
-
-/* Larger text */
-.text{
-  font-size: 40px;
-  font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@media print{
-  body{ margin:0; }
-  .controls{ display:none; }
-  .pages{ gap:0; }
-
-  .page{
-    break-after: page;
-    page-break-after: always;
-  }
-
-  .page:last-child{
-    break-after:auto;
-    page-break-after:auto;
-  }
-
-  *{
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-</style>
-</head>
-
-<body>
-
-<div class="controls">
-  <h2>QR Bulk Label Generator (8 Per Sheet)</h2>
-
-  <textarea id="bulkInput" placeholder="Example:
-RTF-1:RTF-20"></textarea>
-
-  <br>
-  <button onclick="generateBulk()">Generate</button>
-  <button onclick="window.print()">Print</button>
-  <button onclick="clearLabels()">Clear</button>
-</div>
-
-<div id="preview" class="pages"></div>
-
 <script>
 function qrUrl(data){
-  const size = 1000;
+  const size = 800;
   const margin = 12;
   const ecc = "Q";
   return (
@@ -139,108 +13,97 @@ function qrUrl(data){
   );
 }
 
-/* RANGE SUPPORT */
-function parseTrailingNumber(token){
-  const m = token.match(/^(.*?)(\d+)$/);
-  if(!m) return null;
-  return { prefix:m[1], numStr:m[2], num:parseInt(m[2],10) };
+function normalize(str){
+  return str.replace(/\u00A0/g," ").trim();
 }
 
-function expandRangeToken(token){
-  let op=null;
-  if(token.includes("..")) op="..";
-  else if(token.includes(":")) op=":";
-  if(!op) return null;
+/**
+ * Expand a range like "RTF-1:RTF-30" into ["RTF-1", ..., "RTF-30"].
+ * Rules:
+ * - Both sides must share the same prefix (everything except the final number)
+ * - Expands inclusive
+ * - Preserves zero padding width from the start token (e.g. 001)
+ */
+function expandRange(line){
+  // Must contain exactly one ":" separating start and end
+  const parts = line.split(":").map(s => normalize(s));
+  if(parts.length !== 2) return null;
 
-  const parts=token.split(op).map(t=>t.trim());
-  if(parts.length!==2) return null;
+  const [a, b] = parts;
+  if(!a || !b) return null;
 
-  const [a,b]=parts;
-  const pa=parseTrailingNumber(a);
-  if(!pa) return null;
+  // Match "prefix + trailing digits" (e.g., "RTF-" + "001")
+  const re = /^(.*?)(\d+)$/;
+  const ma = a.match(re);
+  const mb = b.match(re);
+  if(!ma || !mb) return null;
 
-  let pb;
-  if(/^\d+$/.test(b)){
-    pb={prefix:pa.prefix,numStr:b,num:parseInt(b,10)};
-  }else{
-    pb=parseTrailingNumber(b);
-    if(!pb) return null;
-  }
+  const prefixA = ma[1];
+  const prefixB = mb[1];
+  if(prefixA !== prefixB) return null; // different prefixes, don't expand
 
-  if(pa.prefix!==pb.prefix) return null;
+  const startNumStr = ma[2];
+  const endNumStr   = mb[2];
+  const start = parseInt(startNumStr, 10);
+  const end   = parseInt(endNumStr, 10);
+  if(Number.isNaN(start) || Number.isNaN(end)) return null;
 
-  const width=pa.numStr.length;
-  const step=pa.num<=pb.num?1:-1;
-  const out=[];
+  const width = startNumStr.length; // keep padding from start side
+  const step = start <= end ? 1 : -1;
 
-  for(let n=pa.num; step>0?n<=pb.num:n>=pb.num; n+=step){
-    out.push(pa.prefix+String(n).padStart(width,"0"));
+  const out = [];
+  for(let n = start; step > 0 ? n <= end : n >= end; n += step){
+    const num = String(n).padStart(width, "0");
+    out.push(prefixA + num);
   }
   return out;
-}
-
-function expandAll(text){
-  const tokens=text.replace(/,/g," ").split(/\s+/).filter(Boolean);
-  const out=[];
-  tokens.forEach(t=>{
-    const ex=expandRangeToken(t);
-    if(ex) out.push(...ex);
-    else out.push(t);
-  });
-  return out;
-}
-
-function makeLabel(code){
-  const label=document.createElement("div");
-  label.className="label";
-
-  const qr=document.createElement("div");
-  qr.className="qr";
-
-  const img=document.createElement("img");
-  img.src=qrUrl(code);
-  img.alt="QR";
-  qr.appendChild(img);
-
-  const text=document.createElement("div");
-  text.className="text";
-  text.textContent=code.toUpperCase();
-
-  label.appendChild(qr);
-  label.appendChild(text);
-  return label;
 }
 
 function generateBulk(){
-  const codes=expandAll(document.getElementById("bulkInput").value);
-  const preview=document.getElementById("preview");
-  preview.innerHTML="";
+  const input = document.getElementById("bulkInput").value;
 
-  for(let i=0;i<codes.length;i+=8){
-    const pageCodes=codes.slice(i,i+8);
-    const page=document.createElement("div");
-    page.className="page";
+  const rawLines = input.split("\n")
+    .map(l => normalize(l))
+    .filter(l => l.length > 0);
 
-    for(let j=0;j<8;j++){
-      if(j<pageCodes.length){
-        page.appendChild(makeLabel(pageCodes[j]));
-      }else{
-        const blank=document.createElement("div");
-        blank.className="label";
-        blank.style.visibility="hidden";
-        page.appendChild(blank);
-      }
+  // Expand ranges
+  const codes = [];
+  for(const line of rawLines){
+    const expanded = line.includes(":") ? expandRange(line) : null;
+    if(expanded && expanded.length){
+      codes.push(...expanded);
+    }else{
+      codes.push(line);
     }
-
-    preview.appendChild(page);
   }
+
+  const preview = document.getElementById("preview");
+  preview.innerHTML = "";
+
+  codes.forEach(code => {
+    const label = document.createElement("div");
+    label.className = "label";
+
+    const qr = document.createElement("div");
+    qr.className = "qr";
+
+    const img = document.createElement("img");
+    img.src = qrUrl(code);
+    img.alt = "QR";
+    qr.appendChild(img);
+
+    const text = document.createElement("div");
+    text.className = "text";
+    text.textContent = code;
+
+    label.appendChild(qr);
+    label.appendChild(text);
+    preview.appendChild(label);
+  });
 }
 
 function clearLabels(){
-  document.getElementById("preview").innerHTML="";
-  document.getElementById("bulkInput").value="";
+  document.getElementById("preview").innerHTML = "";
+  document.getElementById("bulkInput").value = "";
 }
 </script>
-
-</body>
-</html>
