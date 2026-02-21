@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>QR Bulk Label Generator - 12 Per Sheet</title>
+
+<style>
+body{
+  font-family: -apple-system, system-ui, Arial, sans-serif;
+  margin: 20px;
+}
+
+.controls{
+  margin-bottom: 20px;
+}
+
+textarea{
+  width: 100%;
+  height: 140px;
+  font-size: 16px;
+  padding: 10px;
+}
+
+button{
+  font-size: 16px;
+  padding: 10px 16px;
+  margin-right: 8px;
+  margin-top: 10px;
+}
+
+/* ===== 12 LABELS PER 8.5x11 SHEET ===== */
+
+.sheet{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 30px;
+  row-gap: 10px;
+}
+
+/* Fixed height ensures 6 rows per column */
+.label{
+  height: 1.6in;
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  column-gap: 18px;
+  page-break-inside: avoid;
+}
+
+.qr img{
+  width: 120px;
+  height: 120px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.text{
+  font-size: 32px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+/* Page break every 12 labels */
+.label:nth-child(12n){
+  page-break-after: always;
+}
+
+@media print{
+  body{ margin:0.5in; }
+  .controls{ display:none; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="controls">
+  <h2>QR Bulk Label Generator (12 Per Sheet)</h2>
+
+  <p>Supports:</p>
+  <ul>
+    <li>RTF-1:RTF-30</li>
+    <li>RTF-1:30</li>
+    <li>RTF-01..12</li>
+    <li>RTF-1, RTF-3 RTF-7</li>
+    <li>Mixed ranges and lists</li>
+  </ul>
+
+  <textarea id="bulkInput" placeholder="Example:
+RTF-1:RTF-30"></textarea>
+
+  <br>
+  <button onclick="generateBulk()">Generate</button>
+  <button onclick="window.print()">Print</button>
+  <button onclick="clearLabels()">Clear</button>
+</div>
+
+<div id="preview" class="sheet"></div>
+
+<script>
+
+/* ===== QR Generator ===== */
+
+function qrUrl(data){
+  const size = 800;       // high resolution
+  const margin = 12;
+  const ecc = "Q";        // strong error correction
+
+  return (
+    "https://api.qrserver.com/v1/create-qr-code/?" +
+    "format=png" +
+    "&size=" + size + "x" + size +
+    "&margin=" + margin +
+    "&ecc=" + ecc +
+    "&data=" + encodeURIComponent(data)
+  );
+}
+
+/* ===== Range Parsing ===== */
+
+function parseTrailingNumber(token){
+  const m = token.match(/^(.*?)(\d+)$/);
+  if(!m) return null;
+  return { prefix: m[1], numStr: m[2], num: parseInt(m[2],10) };
+}
+
+function expandRangeToken(token){
+
+  let op = null;
+  if(token.includes("..")) op = "..";
+  else if(token.includes(":")) op = ":";
+
+  if(!op) return null;
+
+  const parts = token.split(op).map(t => t.trim());
+  if(parts.length !== 2) return null;
+
+  let [a,b] = parts;
+  if(!a || !b) return null;
+
+  const pa = parseTrailingNumber(a);
+  if(!pa) return null;
+
+  let pb;
+  if(/^\d+$/.test(b)){
+    pb = { prefix: pa.prefix, numStr: b, num: parseInt(b,10) };
+  }else{
+    pb = parseTrailingNumber(b);
+    if(!pb) return null;
+  }
+
+  if(pa.prefix !== pb.prefix) return null;
+
+  const start = pa.num;
+  const end = pb.num;
+  const width = pa.numStr.length;
+
+  const step = start <= end ? 1 : -1;
+  const results = [];
+
+  for(let n = start; step>0 ? n<=end : n>=end; n+=step){
+    results.push(pa.prefix + String(n).padStart(width,"0"));
+  }
+
+  return results;
+}
+
+function expandAll(text){
+  const tokens = text
+    .replace(/,/g," ")
+    .split(/\s+/)
+    .map(t => t.trim())
+    .filter(Boolean);
+
+  const results = [];
+
+  tokens.forEach(token=>{
+    const expanded = expandRangeToken(token);
+    if(expanded) results.push(...expanded);
+    else results.push(token);
+  });
+
+  return results;
+}
+
+/* ===== Label Rendering ===== */
+
+function generateBulk(){
+  const input = document.getElementById("bulkInput").value;
+  const codes = expandAll(input);
+  const preview = document.getElementById("preview");
+
+  preview.innerHTML = "";
+
+  codes.forEach(code=>{
+    const label = document.createElement("div");
+    label.className = "label";
+
+    const qrDiv = document.createElement("div");
+    qrDiv.className = "qr";
+
+    const img = document.createElement("img");
+    img.src = qrUrl(code);
+    img.alt = "QR";
+    qrDiv.appendChild(img);
+
+    const text = document.createElement("div");
+    text.className = "text";
+    text.textContent = code.toUpperCase();
+
+    label.appendChild(qrDiv);
+    label.appendChild(text);
+    preview.appendChild(label);
+  });
+}
+
+function clearLabels(){
+  document.getElementById("preview").innerHTML = "";
+  document.getElementById("bulkInput").value = "";
+}
+
+</script>
+
+</body>
+</html>
