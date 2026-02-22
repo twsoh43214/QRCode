@@ -28,7 +28,6 @@ button{
 }
 
 /* ===== PRINT ===== */
-/* We control margins via the .sheet padding so we can match OL125WX exactly */
 @page{
   size: letter;
   margin: 0;
@@ -39,52 +38,46 @@ button{
   gap: 18px;
 }
 
-/* ONE SHEET = 10 LABELS (2 COL x 5 ROW), each label 4" x 2" */
+/* Sheet layout */
 .sheet{
   width: 8.5in;
   height: 11in;
   box-sizing: border-box;
 
-  /* OL125WX margins */
-  padding: 0.5in 0.18in; /* top/bottom 0.5", left/right 0.18" */
+  padding: 0.5in 0.18in;
 
   display: grid;
-  grid-template-columns: 4in 4in;   /* label width */
-  grid-template-rows: repeat(5, 2in); /* label height */
-  column-gap: 0.14in; /* horizontal spacing */
-  row-gap: 0in;       /* vertical spacing */
+  grid-template-columns: 4in 4in;
+  grid-template-rows: repeat(5, 2in);
+  column-gap: 0.14in;
+  row-gap: 0in;
 
   position: relative;
 }
 
-/* Vertical cut line centered in the 0.14" column gap */
+/* Vertical cut */
 .sheet::before{
   content:"";
   position:absolute;
-
-  /* inside the padded content box */
-  left: calc(0.18in + 4in + 0.07in); /* left margin + col1 width + half the gap */
+  left: calc(0.18in + 4in + 0.07in);
   top: 0.5in;
   bottom: 0.5in;
-
   border-left: 1px dashed #aaa;
-  pointer-events: none;
 }
 
-/* Horizontal cut lines between rows (at 2", 4", 6", 8" within the content area) */
+/* Horizontal cuts */
 .sheet .hcut{
   position:absolute;
   left: 0.18in;
   right: 0.18in;
   border-top: 1px dashed #aaa;
-  pointer-events: none;
 }
 .sheet .hcut.r1{ top: calc(0.5in + 2in); }
 .sheet .hcut.r2{ top: calc(0.5in + 4in); }
 .sheet .hcut.r3{ top: calc(0.5in + 6in); }
 .sheet .hcut.r4{ top: calc(0.5in + 8in); }
 
-/* Label cell */
+/* Label */
 .label{
   box-sizing: border-box;
   width: 4in;
@@ -97,10 +90,7 @@ button{
 
   padding: 0.12in;
 
-  /* cut line / outline */
   border: 1px dashed #bbb;
-
-  /* OL125WX rounded corners (0.17188") */
   border-radius: 0.17188in;
 }
 
@@ -112,13 +102,12 @@ button{
   image-rendering: pixelated;
 }
 
-/* Text */
+/* TEXT AUTO-SHRINK */
 .text{
-  font-size: 36px;
   font-weight: 800;
-  white-space: nowrap;     /* no wrap */
-  overflow: hidden;        /* keep inside */
-  text-overflow: ellipsis; /* show ... if too long */
+  white-space: nowrap;
+  overflow: hidden;
+  font-size: 36px; /* starting size */
 }
 
 @media print{
@@ -172,6 +161,17 @@ function qrUrl(data){
     "&ecc=" + ecc +
     "&data=" + encodeURIComponent(data)
   );
+}
+
+/* Auto-shrink function */
+function shrinkToFit(el){
+  let size = 36;
+  el.style.fontSize = size + "px";
+
+  while(el.scrollWidth > el.clientWidth && size > 12){
+    size -= 1;
+    el.style.fontSize = size + "px";
+  }
 }
 
 /* Range support */
@@ -243,11 +243,13 @@ function makeLabel(code){
 
   label.appendChild(qr);
   label.appendChild(text);
+
+  setTimeout(()=>shrinkToFit(text), 0);
+
   return label;
 }
 
 function makeSheetCutLines(sheet){
-  // Horizontal cut lines between each 2" row (4 lines)
   const lines = ["r1","r2","r3","r4"];
   lines.forEach(cls=>{
     const d=document.createElement("div");
@@ -263,7 +265,6 @@ function generateBulk(){
 
   for(let i=0;i<codes.length;i+=10){
     const sheetCodes=codes.slice(i,i+10);
-
     const sheet=document.createElement("div");
     sheet.className="sheet";
     makeSheetCutLines(sheet);
