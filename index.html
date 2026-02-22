@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>QR Bulk Label Generator - OL125WX (10 Per Sheet) | TST |</title>
+<title>QR Bulk Label Generator - Avery 18163</title>
 
 <style>
 body{
@@ -27,7 +27,7 @@ button{
   margin-top: 10px;
 }
 
-/* ===== PRINT ===== */
+/* PRINT SETTINGS */
 @page{
   size: letter;
   margin: 0;
@@ -38,38 +38,39 @@ button{
   gap: 18px;
 }
 
-/* Sheet layout */
+/* ===== AVERY 18163 LAYOUT ===== */
 .sheet{
   width: 8.5in;
   height: 11in;
   box-sizing: border-box;
 
-  padding: 0.5in 0.18in;
+  /* Avery margins */
+  padding: 0.5in 0.1875in;
 
   display: grid;
   grid-template-columns: 4in 4in;
   grid-template-rows: repeat(5, 2in);
-  column-gap: 0.14in;
+  column-gap: 0.125in; /* Avery 18163 */
   row-gap: 0in;
 
   position: relative;
 }
 
-/* Vertical cut */
+/* Vertical cut guide */
 .sheet::before{
   content:"";
   position:absolute;
-  left: calc(0.18in + 4in + 0.07in);
+  left: calc(0.1875in + 4in + 0.0625in);
   top: 0.5in;
   bottom: 0.5in;
   border-left: 1px dashed #aaa;
 }
 
-/* Horizontal cuts */
+/* Horizontal cut guides */
 .sheet .hcut{
   position:absolute;
-  left: 0.18in;
-  right: 0.18in;
+  left: 0.1875in;
+  right: 0.1875in;
   border-top: 1px dashed #aaa;
 }
 .sheet .hcut.r1{ top: calc(0.5in + 2in); }
@@ -90,8 +91,7 @@ button{
 
   padding: 0.12in;
 
-  border: 1px dashed #bbb;
-  border-radius: 0.17188in;
+  border: 1px dashed #bbb; /* remove if not desired */
 }
 
 /* QR */
@@ -102,12 +102,12 @@ button{
   image-rendering: pixelated;
 }
 
-/* TEXT AUTO-SHRINK */
+/* Text */
 .text{
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
-  font-size: 36px; /* starting size */
+  font-size: 36px;
 }
 
 @media print{
@@ -135,9 +135,11 @@ button{
 <body>
 
 <div class="controls">
-  <h2>QR Label Generator | TST | 10 Per Sheet - OL125WX</h2>
+  <h2>QR Bulk Label Generator (Avery 18163)</h2>
 
-  <textarea id="bulkInput" placeholder="Example:
+  <textarea id="bulkInput" placeholder="One label per line.
+Examples:
+2-11 / A01
 RTF-1:RTF-20"></textarea>
 
   <br>
@@ -163,13 +165,12 @@ function qrUrl(data){
   );
 }
 
-/* Auto-shrink function */
+/* Auto shrink */
 function shrinkToFit(el){
   let size = 36;
   el.style.fontSize = size + "px";
-
   while(el.scrollWidth > el.clientWidth && size > 12){
-    size -= 1;
+    size--;
     el.style.fontSize = size + "px";
   }
 }
@@ -214,29 +215,17 @@ function expandRangeToken(token){
   return out;
 }
 
+/* One label per line */
 function expandAll(text){
-  // One label per line (newline-delimited).
-  // Optional: allow comma-separated labels on the same line.
-  // NEVER split on spaces, so "2-11 / A01" stays intact.
   const lines = text.split(/\r?\n/);
-
   const out = [];
-  lines.forEach(line => {
-    const trimmedLine = line.trim();
-    if(!trimmedLine) return;
-
-    // Allow multiple entries on one line separated by commas
-    const parts = trimmedLine.split(",").map(s => s.trim()).filter(Boolean);
-
-    parts.forEach(part => {
-      // If the entire part is a range token, expand it.
-      // Otherwise treat it as one complete label string (including spaces).
-      const ex = expandRangeToken(part);
-      if(ex) out.push(...ex);
-      else out.push(part);
-    });
+  lines.forEach(line=>{
+    const trimmed = line.trim();
+    if(!trimmed) return;
+    const ex = expandRangeToken(trimmed);
+    if(ex) out.push(...ex);
+    else out.push(trimmed);
   });
-
   return out;
 }
 
@@ -259,16 +248,15 @@ function makeLabel(code){
   label.appendChild(qr);
   label.appendChild(text);
 
-  setTimeout(()=>shrinkToFit(text), 0);
+  setTimeout(()=>shrinkToFit(text),0);
 
   return label;
 }
 
 function makeSheetCutLines(sheet){
-  const lines = ["r1","r2","r3","r4"];
-  lines.forEach(cls=>{
+  ["r1","r2","r3","r4"].forEach(cls=>{
     const d=document.createElement("div");
-    d.className="hcut " + cls;
+    d.className="hcut "+cls;
     sheet.appendChild(d);
   });
 }
