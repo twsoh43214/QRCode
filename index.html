@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>QR Bulk Label Generator - 8 Per Sheet</title>
+<title>QR Bulk Label Generator - OL125WX (10 Per Sheet)</title>
 
 <style>
 body{
@@ -28,9 +28,10 @@ button{
 }
 
 /* ===== PRINT ===== */
+/* We control margins via the .sheet padding so we can match OL125WX exactly */
 @page{
   size: letter;
-  margin: 0.5in;
+  margin: 0;
 }
 
 .pages{
@@ -38,38 +39,72 @@ button{
   gap: 18px;
 }
 
-/* ONE PAGE = 8 LABELS (2 COL x 4 ROW) */
-/* USING SAME SIZE AS 10-PER VERSION */
-.page{
+/* ONE SHEET = 10 LABELS (2 COL x 5 ROW), each label 4" x 2" */
+.sheet{
+  width: 8.5in;
+  height: 11in;
+  box-sizing: border-box;
+
+  /* OL125WX margins */
+  padding: 0.5in 0.18in; /* top/bottom 0.5", left/right 0.18" */
+
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: repeat(4, 2in);
+  grid-template-columns: 4in 4in;   /* label width */
+  grid-template-rows: repeat(5, 2in); /* label height */
+  column-gap: 0.14in; /* horizontal spacing */
+  row-gap: 0in;       /* vertical spacing */
+
   position: relative;
 }
 
-/* Vertical cut line */
-.page::before{
+/* Vertical cut line centered in the 0.14" column gap */
+.sheet::before{
   content:"";
   position:absolute;
-  top:0;
-  bottom:0;
-  left:50%;
-  border-left:1px dashed #aaa;
+
+  /* inside the padded content box */
+  left: calc(0.18in + 4in + 0.07in); /* left margin + col1 width + half the gap */
+  top: 0.5in;
+  bottom: 0.5in;
+
+  border-left: 1px dashed #aaa;
+  pointer-events: none;
 }
 
-/* Label cell (same as 10-per sizing) */
+/* Horizontal cut lines between rows (at 2", 4", 6", 8" within the content area) */
+.sheet .hcut{
+  position:absolute;
+  left: 0.18in;
+  right: 0.18in;
+  border-top: 1px dashed #aaa;
+  pointer-events: none;
+}
+.sheet .hcut.r1{ top: calc(0.5in + 2in); }
+.sheet .hcut.r2{ top: calc(0.5in + 4in); }
+.sheet .hcut.r3{ top: calc(0.5in + 6in); }
+.sheet .hcut.r4{ top: calc(0.5in + 8in); }
+
+/* Label cell */
 .label{
   box-sizing: border-box;
+  width: 4in;
   height: 2in;
+
   display: grid;
   grid-template-columns: 1.35in 1fr;
   align-items: center;
   column-gap: 0.18in;
+
   padding: 0.12in;
+
+  /* cut line / outline */
   border: 1px dashed #bbb;
+
+  /* OL125WX rounded corners (0.17188") */
+  border-radius: 0.17188in;
 }
 
-/* Same QR size as 10-per */
+/* QR */
 .qr img{
   width: 1.35in;
   height: 1.35in;
@@ -77,13 +112,13 @@ button{
   image-rendering: pixelated;
 }
 
-/* Same text size as 10-per */
+/* Text */
 .text{
   font-size: 36px;
   font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: nowrap;     /* no wrap */
+  overflow: hidden;        /* keep inside */
+  text-overflow: ellipsis; /* show ... if too long */
 }
 
 @media print{
@@ -91,12 +126,11 @@ button{
   .controls{ display:none; }
   .pages{ gap:0; }
 
-  .page{
+  .sheet{
     break-after: page;
     page-break-after: always;
   }
-
-  .page:last-child{
+  .sheet:last-child{
     break-after:auto;
     page-break-after:auto;
   }
@@ -112,7 +146,7 @@ button{
 <body>
 
 <div class="controls">
-  <h2>QR Bulk Label Generator (8 Per Sheet)</h2>
+  <h2>QR Bulk Label Generator (OL125WX - 10 Per Sheet)</h2>
 
   <textarea id="bulkInput" placeholder="Example:
 RTF-1:RTF-20"></textarea>
@@ -212,28 +246,40 @@ function makeLabel(code){
   return label;
 }
 
+function makeSheetCutLines(sheet){
+  // Horizontal cut lines between each 2" row (4 lines)
+  const lines = ["r1","r2","r3","r4"];
+  lines.forEach(cls=>{
+    const d=document.createElement("div");
+    d.className="hcut " + cls;
+    sheet.appendChild(d);
+  });
+}
+
 function generateBulk(){
   const codes=expandAll(document.getElementById("bulkInput").value);
   const preview=document.getElementById("preview");
   preview.innerHTML="";
 
-  for(let i=0;i<codes.length;i+=8){
-    const pageCodes=codes.slice(i,i+8);
-    const page=document.createElement("div");
-    page.className="page";
+  for(let i=0;i<codes.length;i+=10){
+    const sheetCodes=codes.slice(i,i+10);
 
-    for(let j=0;j<8;j++){
-      if(j<pageCodes.length){
-        page.appendChild(makeLabel(pageCodes[j]));
+    const sheet=document.createElement("div");
+    sheet.className="sheet";
+    makeSheetCutLines(sheet);
+
+    for(let j=0;j<10;j++){
+      if(j<sheetCodes.length){
+        sheet.appendChild(makeLabel(sheetCodes[j]));
       }else{
         const blank=document.createElement("div");
         blank.className="label";
         blank.style.visibility="hidden";
-        page.appendChild(blank);
+        sheet.appendChild(blank);
       }
     }
 
-    preview.appendChild(page);
+    preview.appendChild(sheet);
   }
 }
 
