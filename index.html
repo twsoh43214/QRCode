@@ -215,13 +215,28 @@ function expandRangeToken(token){
 }
 
 function expandAll(text){
-  const tokens=text.replace(/,/g," ").split(/\s+/).filter(Boolean);
-  const out=[];
-  tokens.forEach(t=>{
-    const ex=expandRangeToken(t);
-    if(ex) out.push(...ex);
-    else out.push(t);
+  // One label per line (newline-delimited).
+  // Optional: allow comma-separated labels on the same line.
+  // NEVER split on spaces, so "2-11 / A01" stays intact.
+  const lines = text.split(/\r?\n/);
+
+  const out = [];
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+    if(!trimmedLine) return;
+
+    // Allow multiple entries on one line separated by commas
+    const parts = trimmedLine.split(",").map(s => s.trim()).filter(Boolean);
+
+    parts.forEach(part => {
+      // If the entire part is a range token, expand it.
+      // Otherwise treat it as one complete label string (including spaces).
+      const ex = expandRangeToken(part);
+      if(ex) out.push(...ex);
+      else out.push(part);
+    });
   });
+
   return out;
 }
 
